@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Scheduling Simulator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background-color: #fff;
+            width: 90%;
+            max-width: 1100px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+        }
+
+        h2 {
+            text-align: center;
+            color: #4CAF50;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        label {
+            font-size: 1.1em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        select, input, button {
+            padding: 10px;
+            font-size: 1em;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            outline: none;
+        }
+
+        select, input {
+            width: 100%;
+            max-width: 300px;
+        }
+
+        input[type="number"] {
+            width: 70px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            color: #333;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .action-btn {
+            padding: 5px 15px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .action-btn:hover {
+            background-color: #c0392b;
+        }
+
+        .results-table {
+            margin-top: 20px;
+        }
+
+        .quantum-input {
+            display: none;
+            width: 70px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>CPU Scheduling Simulator</h2>
+
+        <div class="input-group">
+            <label>Select Scheduling Algorithm: </label>
+            <select id="algorithm">
+                <option value="fcfs">First Come First Serve (FCFS)</option>
+                <option value="sjf">Shortest Job First (SJF)</option>
+                <option value="srtf">Shortest Remaining Time First (SRTF)</option>
+                <option value="rr">Round Robin (RR)</option>
+                <option value="priority">Priority Scheduling</option>
+            </select>
+
+            <br><br>
+            <label id="quantumLabel" class="hidden">Time Quantum (for RR):</label>
+            <input type="number" id="timeQuantum" class="quantum-input" min="1" value="2">
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Process ID</th>
+                    <th>Arrival Time</th>
+                    <th>Burst Time</th>
+                    <th>Priority (Only for Priority Scheduling)</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="processTable">
+            </tbody>
+        </table>
+
+        <button onclick="addProcess()">Add Process</button>
+        <button onclick="calculate()">Calculate</button>
+
+        <h3>Results</h3>
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>Process ID</th>
+                    <th>Arrival Time</th>
+                    <th>Burst Time</th>
+                    <th>Completion Time</th>
+                    <th>Turnaround Time</th>
+                    <th>Waiting Time</th>
+                </tr>
+            </thead>
+            <tbody id="resultTable">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let processes = [];
+
+        document.getElementById("algorithm").addEventListener("change", function() {
+            let isRR = this.value === "rr";
+            document.getElementById("quantumLabel").classList.toggle("hidden", !isRR);
+            document.getElementById("timeQuantum").classList.toggle("hidden", !isRR);
+        });
+
+        function addProcess() {
+            let table = document.getElementById("processTable");
+            let row = table.insertRow();
+            let pid = processes.length + 1;
+
+            row.innerHTML = `
+                <td>${pid}</td>
+                <td><input type="number" min="0" class="arrivalTime"></td>
+                <td><input type="number" min="1" class="burstTime"></td>
+                <td><input type="number" min="1" class="priority"></td>
+                <td><button class="action-btn" onclick="removeProcess(this)">Remove</button></td>
+            `;
+
+            processes.push({ id: pid });
+        }
+
+        function removeProcess(btn) {
+            let row = btn.parentNode.parentNode;
+            row.parentNode.removeChild(row);
+            processes.pop();
+        }
+
+        function calculate() {
+            let rows = document.getElementById("processTable").rows;
+            let algorithm = document.getElementById("algorithm").value;
+            let processList = [];
+
+            for (let i = 0; i < rows.length; i++) {
+                let pid = parseInt(rows[i].cells[0].textContent);
+                let arrivalTime = parseInt(rows[i].cells[1].children[0].value) || 0;
+                let burstTime = parseInt(rows[i].cells[2].children[0].value) || 1;
+                let priority = parseInt(rows[i].cells[3].children[0]?.value) || 0;
+
+                processList.push({ id: pid, arrivalTime, burstTime, priority });
+            }
+
+            let results = [];
+            if (algorithm === "fcfs") results = fcfs(processList);
+            else if (algorithm === "sjf") results = sjf(processList);
+            else if (algorithm === "srtf") results = srtf(processList);
+            else if (algorithm === "rr") results = rr(processList, parseInt(document.getElementById("timeQuantum").value));
+            else if (algorithm === "priority") results = priorityScheduling(processList);
+
+            displayResults(results);
+        }
+
+        function fcfs(processList) {
+            processList.sort((a, b) => a.arrivalTime - b.arrivalTime);
+            let currentTime = 0, results = [];
+            for (let p of processList) {
+                let completionTime = Math.max(currentTime, p.arrivalTime) + p.burstTime;
+                results.push({ ...p, completionTime, turnaroundTime: completionTime - p.arrivalTime, waitingTime: completionTime - p.arrivalTime - p.burstTime });
+                currentTime = completionTime;
+            }
+            return results;
+        }
+
+        function sjf(processList) {
+            processList.sort((a, b) => a.burstTime - b.burstTime);
+            return fcfs(processList);
+        }
+
+        function srtf(processList) {
+            processList.sort((a, b) => a.arrivalTime - b.arrivalTime);
+            let time = 0, completed = 0, results = [], readyQueue = [];
+            while (completed < processList.length) {
+                readyQueue = processList.filter(p => p.arrivalTime <= time && p.burstTime > 0);
+                readyQueue.sort((a, b) => a.burstTime - b.burstTime);
+
+                if (readyQueue.length > 0) {
+                    let p = readyQueue[0];
+                    p.burstTime--;
+                    time++;
+
+                    if (p.burstTime === 0) {
+                        completed++;
+                        results.push({ ...p, completionTime: time, turnaroundTime: time - p.arrivalTime, waitingTime: time - p.arrivalTime - p.burstTime });
+                    }
+                } else {
+                    time++;
+                }
+            }
+            return results;
+        }
+
+        function rr(processList, quantum) {
+            let queue = [...processList], time = 0, results = [];
+            while (queue.length > 0) {
+                let p = queue.shift();
+                let execTime = Math.min(p.burstTime, quantum);
+                p.burstTime -= execTime;
+                time += execTime;
+
+                if (p.burstTime > 0) queue.push(p);
+                else results.push({ ...p, completionTime: time, turnaroundTime: time - p.arrivalTime, waitingTime: time - p.arrivalTime - p.burstTime });
+            }
+            return results;
+        }
+
+        function priorityScheduling(processList) {
+            processList.sort((a, b) => a.priority - b.priority);
+            return fcfs(processList);
+        }
+
+        function displayResults(results) {
+            let table = document.getElementById("resultTable");
+            table.innerHTML = results.map(p => `
+                <tr>
+                    <td>${p.id}</td>
+                    <td>${p.arrivalTime}</td>
+                    <td>${p.burstTime}</td>
+                    <td>${p.completionTime}</td>
+                    <td>${p.turnaroundTime}</td>
+                    <td>${p.waitingTime}</td>
+                </tr>
+            `).join('');
+        }
+    </script>
+
+</body>
+</html>
